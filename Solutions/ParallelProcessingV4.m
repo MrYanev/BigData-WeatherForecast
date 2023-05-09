@@ -1,0 +1,47 @@
+function ParallelProcessingV4
+%% Pre-alocate output array memory
+
+NumLocations = (NumLon - 4) * (NumLat - 4);
+EnsembleVectorPar = zeros(NumLocations, NumberOfHours); % pre-allocate memory
+%% Testing variables
+DataOptions = [200, 1000, 10000]; %options for the number of data
+WorkerOptions = [2, 3, 4, 5, 6, 7, 8];    %options for number of workers
+Results = [];
+%% Parallel Analysis
+for idxTime = 1:NumberOfHours %loop over the hours 25
+    [Data2Process, LatLon] = PrepareData(HourlyData, Latitude, Longitude);  % Passing the required data to each worker
+    %% Creating the parallel pool and attaching the necessary files
+    for idx1 = 1:size(DataOptions, 1) % looping through the data options
+        DataParameters = DataOptions(idx1); %   assigning the number of data to the variable for the process
+        for idx2 = 1:size(WorkerOptions,1)  %   inner loop to go over the different amounts of cores to be used for the process
+            WorkerParameters = WorkerOptions(idx2); %   asigning that value to the vfariable 
+            PoolSize = WorkerParameters;    %setting the PoolSize to the amount of worker
+            if isempty(gcp('nocreate'))
+                parpool('local',PoolSize);  %iniciating the pool
+            end
+            poolobj = gcp;
+
+            addAttachedFiles(poolobj,{'EnsembleValue'});
+            Results = [Results; WorkerParameters; DataParameters; RunTime];
+        end
+    end
+        
+    
+    %% Parallel Processing
+    
+    T4 = toc;
+    parfor idx = 1: DataParameters % Num2Process size(Data2Process,1)
+        [EnsembleVectorPar(idx, idxTime)] = EnsembleValue(Data2Process(idx,:,:,:), LatLon, RadLat, RadLon, RadO3);
+    end
+    
+    T3(idxTime) = toc - T4; % record the parallel processing time for this hour of data
+    fprintf('Parallel processing time for hour %i : %.1f s\n', idxTime, T3(idxTime))
+end
+T2 = toc;
+delete(gcp);
+
+%% Reshape ensemble values to Longitute, Latitute, Hour format
+EnsembleVectorPar = reshape(EnsembleVectorPar, 696, 396, []);
+fprintf('Total processing time for %i workers = %.2f s\n', PoolSize, sum(T3));
+
+end
